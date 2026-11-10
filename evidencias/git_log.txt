@@ -1,3 +1,4 @@
+* df2009e Anade evidencias y URL de la CI al informe
 *   ded650b Merge pull request #2 from Jasov/rojo-a-proposito
 |\  
 | * ed8e735 Documenta en el informe el rojo provocado y su diagnostico

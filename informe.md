@@ -1,13 +1,14 @@
 # Práctica P2 (Tema 2) — Informe
 
 **Nombre:** Joel Cárdenas
-
+**Fecha:** 10.11.2026
+**Entorno usado:** local, Python 3 y Git; CI en GitHub Actions. Sin ROS2 (no he hecho las partes opcionales con ROS2).
 
 ## Declaración de autoría y uso de IA
 
 Trabajo individual. Fuentes consultadas: el enunciado de la P2 y el de la práctica autónoma de la S8, el README y las cabeceras de los scripts del kit (`analiza_bag.py`, `simulador_bags.py`, `regresion_bags.py`, `simula_ci.py`), los apuntes de las sesiones 7, 8 y 9, y la documentación de ROS2 (rosbag2, tf2), de Git y de GitHub Actions.
 
-Uso de asistentes de IA (para qué, o «ninguno»): sí. He usado un asistente de IA (Claude, de Anthropic) como ayuda en  la práctica. 
+Uso de asistentes de IA (para qué, o «ninguno»): sí. He usado un asistente de IA (Claude, de Anthropic) para ejecutar los análisis de los bags, escribir el código y las pruebas del ejercicio 3 y redactar el borrador de este informe. Los commits hechos con su ayuda llevan la línea `Co-Authored-By`. He revisado todo y puedo explicarlo.
 
 ## Ejercicio 1 — Caso 5 (`bags/caso_5_casa`)
 
@@ -343,10 +344,10 @@ Puntos de control de la *Guía de autoformación de la S8* (resumen de lo aprend
 | Campo | Contenido |
 |---|---|
 | URL del repositorio (público, o privado con acceso para el profesor) | https://github.com/Jasov/asr-p2 (público) |
-| Nº de commits y rama(s) de trabajo | PENDIENTE_N_COMMITS commits (ver `evidencias/git_log.txt`). Ramas: `main`, `ej3-rango` (ejercicio 3 y contrato) y `rojo-a-proposito` (rojo provocado y su arreglo). |
+| Nº de commits y rama(s) de trabajo | 20 commits (ver `evidencias/git_log.txt`). Ramas: `main`, `ej3-rango` (ejercicio 3 y contrato) y `rojo-a-proposito` (rojo provocado y su arreglo). |
 | Pull Request (o merge) que integra una rama en `main` (URL) | https://github.com/Jasov/asr-p2/pull/1 (`ej3-rango` → `main`) |
-| Ejecución de CI en **verde** (URL de la ejecución en Actions) | PENDIENTE_URL_VERDE |
-| Ejecución de CI en **rojo** provocada a propósito (URL) y commit que la arregla | PENDIENTE_URL_ROJO |
+| Ejecución de CI en **verde** (URL de la ejecución en Actions) | https://github.com/Jasov/asr-p2/actions/runs/42881930837 (ejecución de `main` tras fusionar el PR nº 1; captura en `evidencias/ci_verde.png`) |
+| Ejecución de CI en **rojo** provocada a propósito (URL) y commit que la arregla | Rojo: https://github.com/Jasov/asr-p2/actions/runs/42883412495 (pull request https://github.com/Jasov/asr-p2/pull/2; captura en `evidencias/ci_rojo.png`). Lo arregla el commit `065a6ec` («Devuelve el umbral de latencia a 0,1 s»), subido después a la misma rama: la CI del PR nº 2 pasó a verde y se fusionó. |
 | Qué rompí a propósito y cómo lo diagnostiqué en el log | En la rama `rojo-a-proposito` cambié un umbral de la herramienta: en `analiza_bag.py`, función `analizar_ruta`, la latencia máxima por defecto pasó de `lat_max=0.1` a `lat_max=2.0` (commit «Sube el umbral de latencia a 2 s (rojo a proposito)»). **Hipótesis antes de subirlo:** el caso 1 tiene una latencia de 1,3 s; con el umbral en 2 s dejará de dar `LATENCIA_ALTA` y fallará algo que compare ese diagnóstico. **Diagnóstico en el log:** en la ejecución en rojo, los pasos «Descargar el codigo», «Preparar Python» e «Instalar dependencias» están en verde y el primero en rojo es **«Pruebas unitarias»**. Al abrirlo, casi al final aparece `FAIL: test_caso1_callback_bloqueante (test_analiza_bag.PruebasBags.test_caso1_callback_bloqueante)` con `AssertionError: ('LATENCIA_ALTA', '/distancia_filtrada') not found in {('CAIDA_EN_CADENA', '/distancia_filtrada')}` y `FAILED (failures=1)`. O sea: en `caso_1` falta justo `LATENCIA_ALTA`, lo que señala al umbral de latencia. Los pasos «Regresion con bags de referencia» y «Bag sano debe dar TODO_OK» salen como omitidos porque un paso anterior falló; el del informe gráfico sí se ejecuta porque lleva `if: always()`. En local, `python3 regresion_bags.py` confirma lo mismo: `[FALLO] caso_1 esperado ['CAIDA_EN_CADENA', 'LATENCIA_ALTA'] (salida 1), obtenido ['CAIDA_EN_CADENA'] (salida 1)`. **Arreglo:** un commit nuevo que devuelve el valor a 0,1 («Devuelve el umbral de latencia a 0,1 s»), sin `--amend` ni `push --force`; la CI de la misma rama pasa a verde. Lo curioso es que con el umbral roto el código de salida del caso 1 seguía siendo 1 (por `CAIDA_EN_CADENA`): mirar solo «falla / no falla» no habría detectado el cambio; lo detecta comparar la **lista** de errores. |
 | Bag(s) que añadí a `esperado.json` y por qué | `mi_rango` (`"salida": 0, "errores": []`) y `mi_fallo` (`"salida": 1, "errores": ["CAIDA_EN_CADENA", "HUECOS"]`). Explicación debajo. |
 

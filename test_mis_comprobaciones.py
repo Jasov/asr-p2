@@ -91,9 +91,19 @@ class PruebasPropias(unittest.TestCase):
     def test_mi_fallo_no_es_un_fallo_de_rango(self):
         # Mi bag del ejercicio 4 (el filtro se cae 10 s) tiene huecos, pero sus valores son validos:
         # esta comprobacion no debe confundir un fallo de ritmo con uno de rango
-        import mis_bags
+        # Copia de mi_fallo (mis_bags.py) para que la prueba no dependa de otro fichero
+        def mi_fallo(msgs):
+            resultado = []
+            for topic, tipo, instante, mensaje in msgs:
+                segundo = instante - sim.T0
+                filtro_caido = 15.0 <= segundo < 25.0
+                if filtro_caido and topic in ('/distancia_filtrada', '/cmd_vel_demo'):
+                    continue
+                resultado.append((topic, tipo, instante, mensaje))
+            return resultado
+
         with tempfile.TemporaryDirectory() as d:
-            sim.generar('caida', d, duracion=30, post=mis_bags.mi_fallo)
+            sim.generar('caida', d, duracion=30, post=mi_fallo)
             self.assertEqual(mc.main([f'{d}/caida', '/distancia_filtrada']), 0)
 
 
