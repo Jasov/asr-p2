@@ -79,7 +79,18 @@ def comprobar_frames(muestras, topic=''):
     Si hay mas de uno, devuelve UN Hallazgo('WARN', 'FRAME_MIXTO', topic, detalle) cuyo detalle liste los
     frame_id distintos encontrados.
     """
-    raise NotImplementedError('Ejercicio 3 (ampliacion): implementa comprobar_frames')
+    # Lista de frame_id distintos, en el orden en que aparecen
+    frames = []
+    for muestra in muestras:
+        if muestra['frame_id'] not in frames:
+            frames.append(muestra['frame_id'])
+
+    # Cero frames (topic vacio) o un solo frame: todo bien
+    if len(frames) <= 1:
+        return []
+
+    detalle = f"{len(frames)} frame_id distintos en el mismo topic: {', '.join(frames)}"
+    return [Hallazgo('WARN', 'FRAME_MIXTO', topic, detalle)]
 
 
 def main(argv=None):
