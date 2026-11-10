@@ -150,11 +150,93 @@ Diagnóstico de `mi_lento`: eslabón = nodo filtro (entre `/distancia` y `/dista
 
 ## Ejercicio 3 — Extensión de la herramienta
 
-Comprobación(es) implementada(s): <<RELLENAR>>
-Decisiones de diseño (¿ERROR o WARN? ¿margen?, ¿qué falsos positivos hay?): <<RELLENAR>>
-Pruebas propias añadidas (nombre y qué comprueban): <<RELLENAR>>
-Salida de `python3 -m unittest -v test_mis_comprobaciones`: <<RELLENAR>>
-Resultado sobre `bags/mi_rango` (antes: TODO_OK; ahora: ...): <<RELLENAR>>
+**El punto ciego (antes).** Hipótesis: `analiza_bag.py` solo mira ritmos, huecos, latencia y reloj; nunca mira el valor de `range`. Así que un bag con valores imposibles pero a buen ritmo debería dar `TODO_OK`.
+
+```
+$ python3 -c "import simulador_bags as s; s.generar('mi_rango', 'bags', fuera_de_rango=(10, 12, 9.9))"
+mi_rango: 1200 mensajes -> bags/mi_rango
+$ python3 analiza_bag.py bags/mi_rango --esperado /distancia=10 --png informe_mi_rango.png
+topic                    tipo                           n      Hz  max dt  lat med
+/cmd_vel_demo            Twist                        400   10.00    0.10        -
+/distancia               Range                        400   10.00    0.10    0.002
+/distancia_filtrada      Range                        400   10.00    0.10    0.007
+Hallazgos:
+  [INFO ] TODO_OK           -                      ritmos, huecos, latencias y reloj dentro de lo esperado
+(código de salida: 0)
+```
+
+Confirmado: el sensor publica 9,9 m con `max_range` = 4 m durante 2 s (se ve el escalón en el panel de valores de `informe_mi_rango.png`) y la herramienta no dice nada.
+
+Comprobación(es) implementada(s): las dos, en `mis_comprobaciones.py`, sin cambiar nombres ni firmas.
+
+- `comprobar_rangos(muestras, topic, margen=0.0)` (obligatoria). Recorre las muestras con un bucle y guarda en una lista las que **no** cumplen `min_range - margen <= range <= max_range + margen`. Si la lista está vacía devuelve `[]`. Si no, devuelve **un solo** `Hallazgo('ERROR', 'RANGO_FUERA', topic, detalle)`; el detalle dice cuántas fallan de cuántas, entre qué instantes (primera y última mala) y un valor de ejemplo con sus límites.
+- `comprobar_frames(muestras, topic)` (ampliación). Recorre las muestras y va apuntando cada `frame_id` que no había visto. Si al final hay más de uno, devuelve un `Hallazgo('WARN', 'FRAME_MIXTO', topic, detalle)` con la lista de frames.
+
+Decisiones de diseño (¿ERROR o WARN? ¿margen?, ¿qué falsos positivos hay?):
+
+- **`RANGO_FUERA` es ERROR** porque un valor fuera de los límites que declara el propio sensor es un dato falso seguro, y además se propaga: el filtro lo promedia y el controlador decide con él. Lo he comprobado: en `mi_rango`, `/distancia_filtrada` también se sale (22 muestras, la primera con 4,47 m) aunque el filtro funciona bien. Con ERROR el código de salida es 1 y una CI lo pararía.
+- **`FRAME_MIXTO` es WARN** porque es sospechoso pero no siempre es un fallo (por ejemplo, dos sensores publicando a propósito en el mismo topic). Avisa, pero no pone la salida a 1.
+- **Margen = 0.0 por defecto.** Los límites los da el propio mensaje (`min_range`, `max_range`), así que por defecto se respetan tal cual, y el valor justo en el límite se da por bueno (uso `<=`). El margen queda como parámetro para sensores reales con ruido: si un sensor de 4 m publica 4,02 m por redondeo, se puede llamar con `margen=0.05` en vez de tocar el código. No pongo un margen fijo porque depende de cada sensor.
+- **Falsos positivos posibles:**
+  1. Sensores que publican `inf` (o `-inf`) a propósito cuando no ven ningún obstáculo: mi comprobación lo marcaría como error aunque es un comportamiento aceptado. Habría que excluir `inf` si el sensor sigue ese convenio.
+  2. `NaN`: lo cuento como fuera de rango (la comparación con `NaN` siempre es falsa). Me parece correcto, pero algún driver lo usa como «sin lectura» y entonces sería otro falso positivo.
+  3. Ruido en el límite: un valor de 4,001 m con margen 0 da ERROR aunque sea solo redondeo. Para eso está el margen.
+  4. Mensajes con `min_range` y `max_range` sin rellenar (los dos a 0): todas las muestras saldrían como malas, y el fallo real sería de configuración del driver, no del valor.
+- **Falso negativo conocido:** un valor dentro del rango pero falso (por ejemplo, un sensor pegado en 1,0 m) no se detecta. Esta comprobación solo ve valores imposibles, no valores incorrectos.
+
+Pruebas propias añadidas (nombre y qué comprueban), en la clase `PruebasPropias`:
+
+| Prueba | Qué comprueba |
+|---|---|
+| `test_valor_exactamente_en_el_limite` | 4,0 m con máximo 4,0 y 0,02 m con mínimo 0,02 **no** son error (el límite es válido). |
+| `test_malas_no_seguidas_un_solo_hallazgo` | Tres muestras malas separadas dan un único hallazgo, con «3 de 6» y el intervalo de t=1.0 s a t=5.0 s. |
+| `test_nan_cuenta_como_fuera_de_rango` | Un `NaN` se marca como `RANGO_FUERA`. |
+| `test_frames_con_topic_vacio` | `comprobar_frames` con una lista vacía devuelve `[]` sin dar excepción. |
+| `test_mi_fallo_no_es_un_fallo_de_rango` | Con mi bag del ejercicio 4 (filtro caído 10 s) la comprobación da salida 0: no confunde un fallo de ritmo con uno de rango. |
+
+Salida de `python3 -m unittest -v test_mis_comprobaciones` (he quitado las líneas que imprimen el simulador y `main` entre prueba y prueba, para que se lea mejor):
+
+```
+test_dos_frames (test_mis_comprobaciones.PruebasFrames.test_dos_frames) ... ok
+test_un_solo_frame (test_mis_comprobaciones.PruebasFrames.test_un_solo_frame) ... ok
+test_frames_con_topic_vacio (test_mis_comprobaciones.PruebasPropias.test_frames_con_topic_vacio) ... ok
+test_malas_no_seguidas_un_solo_hallazgo (test_mis_comprobaciones.PruebasPropias.test_malas_no_seguidas_un_solo_hallazgo) ... ok
+test_mi_fallo_no_es_un_fallo_de_rango (test_mis_comprobaciones.PruebasPropias.test_mi_fallo_no_es_un_fallo_de_rango) ... ok
+test_nan_cuenta_como_fuera_de_rango (test_mis_comprobaciones.PruebasPropias.test_nan_cuenta_como_fuera_de_rango) ... ok
+test_valor_exactamente_en_el_limite (test_mis_comprobaciones.PruebasPropias.test_valor_exactamente_en_el_limite) ... ok
+test_con_bag_real_fuera_de_rango (test_mis_comprobaciones.PruebasRangos.test_con_bag_real_fuera_de_rango) ... ok
+test_con_bag_real_sano (test_mis_comprobaciones.PruebasRangos.test_con_bag_real_sano) ... ok
+test_margen_de_tolerancia (test_mis_comprobaciones.PruebasRangos.test_margen_de_tolerancia) ... ok
+test_por_debajo_del_minimo (test_mis_comprobaciones.PruebasRangos.test_por_debajo_del_minimo) ... ok
+test_por_encima_del_maximo (test_mis_comprobaciones.PruebasRangos.test_por_encima_del_maximo) ... ok
+test_sin_muestras (test_mis_comprobaciones.PruebasRangos.test_sin_muestras) ... ok
+test_todo_en_rango (test_mis_comprobaciones.PruebasRangos.test_todo_en_rango) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.200s
+
+OK
+```
+
+Antes de implementar nada, estas pruebas daban `FAILED (errors=7, skipped=2)`. Las 13 pruebas originales (`python3 -m unittest test_analiza_bag`) siguen pasando porque no he tocado `analiza_bag.py`.
+
+Resultado sobre `bags/mi_rango` (antes: TODO_OK; ahora: ...):
+
+```
+$ python3 mis_comprobaciones.py bags/mi_rango /distancia
+[ERROR] RANGO_FUERA    /distancia  20 de 400 muestras fuera de [min_range, max_range] entre t=10.1 s y t=12.0 s (ejemplo: range=9.90 m con limites [0.02, 4.00] m)
+(código de salida: 1)
+
+$ python3 mis_comprobaciones.py bags/mi_sano /distancia
+[INFO ] /distancia: sin problemas de rango ni de frame (400 muestras)
+(código de salida: 0)
+
+$ python3 mis_comprobaciones.py bags/mi_rango /distancia_filtrada
+[ERROR] RANGO_FUERA    /distancia_filtrada  22 de 400 muestras fuera de [min_range, max_range] entre t=10.2 s y t=12.3 s (ejemplo: range=4.47 m con limites [0.02, 4.00] m)
+(código de salida: 1)
+```
+
+Cuadra con cómo se generó el bag: 2 s a 10 Hz son 20 muestras, entre el segundo 10 y el 12. El tercer comando muestra que el dato malo pasa el filtro: el eslabón roto es el sensor (origen aguas arriba) y lo del filtro es consecuencia.
 
 ## Ejercicio 4 — Un quinto fallo
 
@@ -260,15 +342,32 @@ Puntos de control de la *Guía de autoformación de la S8* (resumen de lo aprend
 
 | Campo | Contenido |
 |---|---|
-| URL del repositorio (público, o privado con acceso para el profesor) | <<RELLENAR>> |
-| Nº de commits y rama(s) de trabajo | <<RELLENAR>> |
-| Pull Request (o merge) que integra una rama en `main` (URL) | <<RELLENAR>> |
-| Ejecución de CI en **verde** (URL de la ejecución en Actions) | <<RELLENAR>> |
-| Ejecución de CI en **rojo** provocada a propósito (URL) y commit que la arregla | <<RELLENAR>> |
-| Qué rompí a propósito y cómo lo diagnostiqué en el log | <<RELLENAR>> |
-| Bag(s) que añadí a `esperado.json` y por qué | <<RELLENAR>> |
+| URL del repositorio (público, o privado con acceso para el profesor) | https://github.com/Jasov/asr-p2 (público) |
+| Nº de commits y rama(s) de trabajo | PENDIENTE_N_COMMITS commits (ver `evidencias/git_log.txt`). Ramas: `main`, `ej3-rango` (ejercicio 3 y contrato) y `rojo-a-proposito` (rojo provocado y su arreglo). |
+| Pull Request (o merge) que integra una rama en `main` (URL) | https://github.com/Jasov/asr-p2/pull/1 (`ej3-rango` → `main`) |
+| Ejecución de CI en **verde** (URL de la ejecución en Actions) | PENDIENTE_URL_VERDE |
+| Ejecución de CI en **rojo** provocada a propósito (URL) y commit que la arregla | PENDIENTE_URL_ROJO |
+| Qué rompí a propósito y cómo lo diagnostiqué en el log | PENDIENTE_ROJO |
+| Bag(s) que añadí a `esperado.json` y por qué | `mi_rango` (`"salida": 0, "errores": []`) y `mi_fallo` (`"salida": 1, "errores": ["CAIDA_EN_CADENA", "HUECOS"]`). Explicación debajo. |
 
-Si **no** has podido usar GitHub, escribe aquí por qué y adjunta en `evidencias/` el `git_log.txt`, la salida de `simula_ci.py` y las capturas `ci_rojo` / `ci_verde` de la simulación local: la nota máxima del ejercicio baja (ver enunciado).
+**Por qué `mi_rango` está en el contrato con «sin errores».** El contrato no guarda lo que *debería* decir la herramienta, sino lo que dice **hoy**. Hoy `analiza_bag.py` da `TODO_OK` y salida 0 sobre `mi_rango`, porque no mira valores (el `RANGO_FUERA` lo da mi comprobación aparte, `mis_comprobaciones.py`, que no está integrada en `analiza_bag.py`). Si pusiera en el contrato `RANGO_FUERA`, la regresión fallaría siempre. Al apuntarlo así consigo dos cosas: (1) el punto ciego queda escrito y versionado, a la vista de todos; (2) el día que alguien integre la comprobación de rangos en `analiza_bag.py`, la CI se pondrá en rojo en este bag y obligará a cambiar el contrato a propósito, con un commit que explique el cambio. Un diagnóstico no cambia «sin que nadie se entere».
+
+`mi_fallo` lo añado para que quede fijado que una caída del filtro se detecta como `HUECOS` + `CAIDA_EN_CADENA`: si alguien toca el umbral de huecos o el de caída de ritmo y deja de verse, la CI avisa.
+
+```
+$ python3 regresion_bags.py
+[OK   ] caso_0_linea_base    errores = ninguno
+[OK   ] caso_1               errores = ['CAIDA_EN_CADENA', 'LATENCIA_ALTA']
+[OK   ] caso_2               errores = ['RELOJ_DESFASADO']
+[OK   ] caso_3               errores = ['HUECOS']
+[OK   ] caso_4               errores = ['SIN_DATOS']
+[OK   ] mi_rango             errores = ninguno
+[OK   ] mi_fallo             errores = ['CAIDA_EN_CADENA', 'HUECOS']
+
+7/7 bags con el diagnostico esperado
+```
+
+Sobre el historial: el primer commit («Punto de partida de la P2») se hizo antes de empezar el ejercicio 1 y hay un commit por cada paso. Todos los commits son del mismo día (10.11.2026): hice la práctica entera en una jornada y no he cambiado las fechas. `informe_caso5.png` y las demás gráficas no están en el repositorio porque el `.gitignore` del kit excluye `informe_*.png` (son salidas que se regeneran con un comando); sí van en el `.zip` de entrega.
 
 ## Memoria conceptual (con tus palabras; máximo 1 página en total)
 

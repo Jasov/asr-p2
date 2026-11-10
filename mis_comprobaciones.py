@@ -50,7 +50,27 @@ def comprobar_rangos(muestras, topic='', margen=0.0):
     Si alguna no cumple, devuelve UN solo Hallazgo('ERROR', 'RANGO_FUERA', topic, detalle) cuyo detalle diga
     cuantas muestras fallan (de cuantas) y en que intervalo de tiempo ocurren (t de la primera y de la ultima).
     """
-    raise NotImplementedError('Ejercicio 3: implementa comprobar_rangos')
+    # 1) Me quedo con las muestras cuyo valor NO esta dentro de los limites del propio sensor
+    malas = []
+    for muestra in muestras:
+        minimo = muestra['min_range'] - margen
+        maximo = muestra['max_range'] + margen
+        dentro = minimo <= muestra['range'] <= maximo      # con NaN esto es False: tambien cuenta como mala
+        if not dentro:
+            malas.append(muestra)
+
+    # 2) Si no hay ninguna mala, no hay hallazgo
+    if len(malas) == 0:
+        return []
+
+    # 3) Un solo hallazgo que resume cuantas fallan, cuando y un valor de ejemplo
+    primera = malas[0]
+    ultima = malas[-1]
+    detalle = (f"{len(malas)} de {len(muestras)} muestras fuera de [min_range, max_range] "
+               f"entre t={primera['t']:.1f} s y t={ultima['t']:.1f} s "
+               f"(ejemplo: range={primera['range']:.2f} m con limites "
+               f"[{primera['min_range']:.2f}, {primera['max_range']:.2f}] m)")
+    return [Hallazgo('ERROR', 'RANGO_FUERA', topic, detalle)]
 
 
 def comprobar_frames(muestras, topic=''):
@@ -59,7 +79,18 @@ def comprobar_frames(muestras, topic=''):
     Si hay mas de uno, devuelve UN Hallazgo('WARN', 'FRAME_MIXTO', topic, detalle) cuyo detalle liste los
     frame_id distintos encontrados.
     """
-    raise NotImplementedError('Ejercicio 3 (ampliacion): implementa comprobar_frames')
+    # Lista de frame_id distintos, en el orden en que aparecen
+    frames = []
+    for muestra in muestras:
+        if muestra['frame_id'] not in frames:
+            frames.append(muestra['frame_id'])
+
+    # Cero frames (topic vacio) o un solo frame: todo bien
+    if len(frames) <= 1:
+        return []
+
+    detalle = f"{len(frames)} frame_id distintos en el mismo topic: {', '.join(frames)}"
+    return [Hallazgo('WARN', 'FRAME_MIXTO', topic, detalle)]
 
 
 def main(argv=None):

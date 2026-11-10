@@ -65,7 +65,36 @@ class PruebasFrames(unittest.TestCase):
 
 class PruebasPropias(unittest.TestCase):
     """TU TRABAJO: anade aqui al menos dos pruebas nuevas (casos limite, otro topic, tu propio fallo...)."""
-    pass
+
+    def test_valor_exactamente_en_el_limite(self):
+        # 4.0 m con max_range = 4.0 y 0.02 m con min_range = 0.02: el limite cuenta como valido
+        self.assertEqual(mc.comprobar_rangos([m(0, 4.0), m(1, 0.02)], '/d'), [])
+
+    def test_malas_no_seguidas_un_solo_hallazgo(self):
+        # Tres muestras malas separadas (t=1, t=3 y t=5): un unico hallazgo con el total y el intervalo
+        muestras = [m(0, 1.0), m(1, 9.9), m(2, 1.0), m(3, 0.001), m(4, 1.0), m(5, 7.0)]
+        h = mc.comprobar_rangos(muestras, '/d')
+        self.assertEqual(len(h), 1)
+        self.assertIn('3 de 6', h[0].detalle)
+        self.assertIn('t=1.0 s', h[0].detalle)
+        self.assertIn('t=5.0 s', h[0].detalle)
+
+    def test_nan_cuenta_como_fuera_de_rango(self):
+        # Un NaN no es una distancia valida: debe salir como RANGO_FUERA
+        h = mc.comprobar_rangos([m(0, 1.0), m(1, float('nan'))], '/d')
+        self.assertEqual([x.codigo for x in h], ['RANGO_FUERA'])
+
+    def test_frames_con_topic_vacio(self):
+        # Sin muestras no hay frames que comparar: lista vacia, sin excepcion
+        self.assertEqual(mc.comprobar_frames([], '/d'), [])
+
+    def test_mi_fallo_no_es_un_fallo_de_rango(self):
+        # Mi bag del ejercicio 4 (el filtro se cae 10 s) tiene huecos, pero sus valores son validos:
+        # esta comprobacion no debe confundir un fallo de ritmo con uno de rango
+        import mis_bags
+        with tempfile.TemporaryDirectory() as d:
+            sim.generar('caida', d, duracion=30, post=mis_bags.mi_fallo)
+            self.assertEqual(mc.main([f'{d}/caida', '/distancia_filtrada']), 0)
 
 
 if __name__ == '__main__':
