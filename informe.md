@@ -10,8 +10,9 @@
 
 ## Declaración de autoría y uso de IA
 
-Trabajo individual. Fuentes consultadas: <<RELLENAR>>
-Uso de asistentes de IA (para qué, o «ninguno»): <<RELLENAR>>
+Trabajo individual. Fuentes consultadas: el enunciado de la P2 y el de la práctica autónoma de la S8, el README y las cabeceras de los scripts del kit (`analiza_bag.py`, `simulador_bags.py`, `regresion_bags.py`, `simula_ci.py`), los apuntes de las sesiones 7, 8 y 9, y la documentación de ROS2 (rosbag2, tf2), de Git y de GitHub Actions.
+
+Uso de asistentes de IA (para qué, o «ninguno»): sí. He usado un asistente de IA (Claude, de Anthropic) como ayuda en toda la práctica: para ejecutar los análisis de los bags, escribir el código de `mis_comprobaciones.py`, `mis_bags.py` y las pruebas propias, preparar los commits y redactar el borrador de este informe. Los commits hechos con su ayuda llevan la línea `Co-Authored-By`. He revisado y ejecutado todo lo que entrego y puedo explicarlo.
 
 ## Ejercicio 1 — Caso 5 (`bags/caso_5_casa`)
 
@@ -276,18 +277,46 @@ Si **no** has podido usar GitHub, escribe aquí por qué y adjunta en `evidencia
 
 ## Memoria conceptual (con tus palabras; máximo 1 página en total)
 
-**M1.** Familias de fallo de arquitectura (estructural, dinámico, de tiempo, de origen aguas arriba): un ejemplo de cada una y la herramienta más barata que la detectaría. <<RELLENAR>>
+**M1.** Familias de fallo de arquitectura (estructural, dinámico, de tiempo, de origen aguas arriba): un ejemplo de cada una y la herramienta más barata que la detectaría.
 
-**M2.** ¿Por qué una herramienta de análisis necesita pruebas unitarias, y qué significa que «un fallo no detectado es una especificación pendiente»? <<RELLENAR>>
+- **Estructural** (algo no existe o no está conectado): el controlador publica en `/cmd_vel` en vez de `/cmd_vel_demo` (caso 4). Lo más barato: `ros2 topic list` o `ros2 topic info`; en un bag, `--info`.
+- **Dinámico** (está conectado, pero el ritmo es malo o hay huecos): el filtro tarda 0,25 s por mensaje y saca 4 Hz en vez de 10 (mi `mi_lento`). Lo más barato: `ros2 topic hz` en la entrada y en la salida del nodo.
+- **De tiempo** (los mensajes llegan, pero viejos o con sellos incoherentes): el filtro estampa con tiempo 0 por tener `use_sim_time` distinto (caso 2). Lo más barato: `ros2 topic delay`, o mirar `header.stamp` con `ros2 topic echo`.
+- **De origen aguas arriba** (todo lo de abajo falla porque falla el primero): el sensor publica a 1 Hz (caso 5) o se calla 7 s (caso 3). Lo más barato: `ros2 topic hz` sobre el **primer** topic de la cadena antes de sospechar de los demás.
 
-**M3.** ¿Qué ocurre exactamente en un conflicto de fusión en Git, cómo se ve en el fichero y cómo se resuelve? ¿Por qué no se debe «aceptar el mío» sin leer? <<RELLENAR>>
+**M2.** ¿Por qué una herramienta de análisis necesita pruebas unitarias, y qué significa que «un fallo no detectado es una especificación pendiente»?
 
-**M4.** ¿Qué garantiza y qué NO garantiza una CI en verde? Usa como ejemplo el contrato de regresión con bags. <<RELLENAR>>
+Porque nos fiamos de lo que dice. Si la herramienta tiene un error, puede decir `TODO_OK` de un sistema roto, y eso es peor que no tener herramienta. Las pruebas fijan qué debe responder ante datos conocidos (por ejemplo, 4,0 m exactos no es error y 4,05 m sí) y avisan si alguien cambia un umbral sin querer. La frase significa que cuando la herramienta no ve un fallo no es que esté «rota»: es que nadie le había pedido todavía comprobar eso. `mi_rango` daba `TODO_OK` con 9,9 m porque no existía la regla «`range` debe estar entre mínimo y máximo». Al encontrar el fallo se escribe la regla, primero como prueba y luego como código (`comprobar_rangos`), y desde entonces queda vigilado.
+
+**M3.** ¿Qué ocurre exactamente en un conflicto de fusión en Git, cómo se ve en el fichero y cómo se resuelve? ¿Por qué no se debe «aceptar el mío» sin leer?
+
+Ocurre cuando dos ramas han cambiado **las mismas líneas** del mismo fichero de forma distinta. Git no sabe cuál vale, detiene la fusión y deja las dos versiones dentro del fichero con marcas:
+
+```
+<<<<<<< HEAD
+      "salida": 1,
+=======
+      "salida": 0,
+>>>>>>> otra-rama
+```
+
+Arriba está mi versión, abajo la de la otra rama. Se resuelve editando el fichero para dejar el contenido correcto (una, la otra o una mezcla), borrando las tres marcas, ejecutando las pruebas y haciendo `git add` y `git commit`. No se debe aceptar «el mío» sin leer porque se borra el trabajo del otro, que puede ser justo un arreglo. En el ejemplo, quedarme con mi línea de `esperado.json` podría deshacer la corrección del contrato de un compañero y dejar la CI vigilando algo falso.
+
+**M4.** ¿Qué garantiza y qué NO garantiza una CI en verde? Usa como ejemplo el contrato de regresión con bags.
+
+Garantiza que, en una máquina limpia, el código de ese commit pasa las comprobaciones que hemos escrito: las pruebas unitarias y que `analiza_bag.py` sigue dando sobre cada bag de `esperado.json` el mismo diagnóstico que el día que se firmó el contrato. Si alguien cambia un umbral y el caso 1 deja de dar `LATENCIA_ALTA`, sale rojo. **No** garantiza que ese diagnóstico sea el correcto ni que no haya fallos que nadie ha probado. Ejemplo: en mi contrato `mi_rango` figura con `"errores": []`, es decir, la CI está en verde aunque ese bag tiene un sensor publicando 9,9 m. El verde solo dice «la herramienta se comporta igual que ayer», no «el robot funciona». Tampoco garantiza nada sobre el robot real: los bags son sintéticos y la CI no ejecuta ROS2.
 
 ## Opcional — `ros2 bag play` y RViz2
 
-<<RELLENAR o "No realizado">>
+No realizado (no he usado ROS2 en esta práctica).
 
 ## Reflexión final (5 líneas)
 
-¿Qué fue lo más difícil? ¿Qué cambiarías en la herramienta? ¿Qué le faltó al bag para estar seguro de la causa? <<RELLENAR>>
+¿Qué fue lo más difícil? ¿Qué cambiarías en la herramienta? ¿Qué le faltó al bag para estar seguro de la causa?
+
+Lo más difícil fue separar el síntoma de la causa: en casi todos los bags el problema se ve en `/cmd_vel_demo`, pero nunca está ahí.
+También cuesta escribir la hipótesis antes de ejecutar, porque obliga a pensar qué números espero ver.
+En la herramienta cambiaría el texto de `HUECO_ORIGEN`, que manda mirar «aguas arriba» incluso cuando el topic de arriba está sano (mi ejercicio 4), e integraría `comprobar_rangos` en el análisis normal.
+Además quitaría el valor por defecto de 10 Hz: el ritmo esperado debería venir siempre de un contrato.
+A los bags les faltan los logs (`/rosout`) y los parámetros de los nodos: con ellos podría confirmar si el sensor del caso 5 está configurado a 1 Hz o si el filtro de mi reto se cayó de verdad, en vez de decir «causa probable».
+
