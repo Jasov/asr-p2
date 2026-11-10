@@ -162,17 +162,63 @@ Resultado sobre `bags/mi_rango` (antes: TODO_OK; ahora: ...): <<RELLENAR>>
 
 ## Ejercicio 4 — Un quinto fallo
 
-Ficha del fallo (SIN la solución; es lo que recibirá tu compañero):
-- Nombre del bag: <<RELLENAR>>
-- Síntoma observable: <<RELLENAR>>
-- Qué debe averiguar quien lo resuelva: <<RELLENAR>>
+Ficha del fallo (SIN la solución; es lo que recibirá tu compañero). Está en `reto/reto_1_ficha.md`:
+- Nombre del bag: `reto/reto_1` (copia sin pistas de `bags/mi_fallo`, hecha con `python3 empaquetar_reto.py bags/mi_fallo reto/`).
+- Síntoma observable: en mitad de la prueba el robot deja de recibir órdenes de velocidad durante varios segundos y después sigue funcionando como si no hubiera pasado nada. Nadie tocó el robot ni el sensor.
+- Qué debe averiguar quien lo resuelva: en qué eslabón empieza el problema y cuándo, la familia del fallo, la causa raíz más probable (y cuáles descarta) y un arreglo concreto y comprobable.
 
 **Solución (aparte, en sobre cerrado hasta que el compañero entregue):**
-- Cómo se genera (parámetros o función `post`): <<RELLENAR>>
-- Hallazgo(s) de `analiza_bag.py` que lo detectan, o por qué la herramienta no lo detecta: <<RELLENAR>>
-- Eslabón, familia, causa y arreglo: <<RELLENAR>>
 
-Resultado de la resolución del compañero (¿acertó? ¿qué le faltó? Si no hubo intercambio, «sin intercambio» y por qué): <<RELLENAR>>
+- Cómo se genera (parámetros o función `post`): el fallo es **un nodo que se cae y vuelve a arrancar**. El nodo filtro está caído entre el segundo 15 y el 25. La función `mi_fallo(msgs)` de `mis_bags.py` recorre todos los mensajes y **no guarda** los de `/distancia_filtrada` ni los de `/cmd_vel_demo` cuyo instante cae en ese intervalo (el controlador solo publica cuando recibe un dato filtrado, así que también calla). El sensor no se toca.
+
+  ```python
+  def mi_fallo(msgs):
+      resultado = []
+      for topic, tipo, instante, mensaje in msgs:
+          segundo = instante - sim.T0          # segundos desde el inicio del bag
+          filtro_caido = 15.0 <= segundo < 25.0
+          if filtro_caido and topic in ('/distancia_filtrada', '/cmd_vel_demo'):
+              continue                         # este mensaje nunca se publico: no se guarda
+          resultado.append((topic, tipo, instante, mensaje))
+      return resultado
+
+  sim.generar('mi_fallo', 'bags', post=mi_fallo)      # o: python3 mis_bags.py
+  ```
+
+- Hipótesis antes de analizar: `/distancia` normal (400 mensajes, 10 Hz); un hueco de unos 10 s en `/distancia_filtrada` y en `/cmd_vel_demo` (300 mensajes cada uno); la herramienta debería dar `HUECOS` en esos dos topics y ninguno en `/distancia`.
+
+- Hallazgo(s) de `analiza_bag.py` que lo detectan, o por qué la herramienta no lo detecta:
+
+  ```
+  $ python3 analiza_bag.py bags/mi_fallo --esperado /distancia=10 --png informe_mi_fallo.png
+  topic                    tipo                           n      Hz  max dt  lat med
+  /cmd_vel_demo            Twist                        300    7.49   10.10        -
+  /distancia               Range                        400   10.00    0.10    0.002
+  /distancia_filtrada      Range                        300    7.49   10.10    0.007
+
+  Hallazgos:
+    [ERROR] CAIDA_EN_CADENA   /distancia_filtrada    /distancia 10.0 Hz -> /distancia_filtrada 7.5 Hz: el ritmo cae en el nodo que une ambos topics
+    [ERROR] HUECOS            /cmd_vel_demo          sin mensajes entre 14.9 s y 25.0 s (10.1 s)
+    [ERROR] HUECOS            /distancia_filtrada    sin mensajes entre 14.9 s y 25.0 s (10.1 s)
+    [INFO ] HUECO_ORIGEN      /distancia_filtrada    el hueco empieza primero en /distancia_filtrada (14.9 s): mirad aguas arriba (sensor, driver, cable), el resto es consecuencia
+  (código de salida: 1)
+  ```
+
+  **Qué ve la herramienta:** el hueco de 10,1 s en los dos topics (`HUECOS`), y que el primer topic afectado es `/distancia_filtrada` (`HUECO_ORIGEN`). Eso localiza bien el eslabón.
+
+  **Qué no ve o dice mal:**
+  1. El texto de `HUECO_ORIGEN` aconseja «mirad aguas arriba (sensor, driver, cable)». Aquí ese consejo es engañoso: lo que hay aguas arriba (`/distancia`) está perfecto, 10 Hz y sin huecos. El problema es el nodo que **publica** el topic donde empieza el hueco, o sea el filtro. El mensaje está pensado para un hueco que nace en el sensor (caso 3) y no distingue este caso.
+  2. `CAIDA_EN_CADENA` (10 → 7,5 Hz) es verdad en media, pero confunde: hace pensar en un filtro lento como en el caso 1. No es eso: fuera del hueco el filtro va a 10 Hz y la latencia es de 7 ms. El 7,5 sale de dividir 300 mensajes entre 40 s.
+  3. La herramienta no puede saber **por qué** calló el nodo: una caída y reinicio, un callback bloqueado 10 s o una red cortada dejan el mismo hueco en el bag. Para distinguirlo harían falta los logs (`/rosout`), que este bag no tiene.
+
+- Eslabón, familia, causa y arreglo:
+  - **Eslabón:** el nodo filtro (entre `/distancia` y `/distancia_filtrada`). El hueco de `/cmd_vel_demo` es consecuencia.
+  - **Familia:** dinámico (huecos). No es de origen aguas arriba, porque el sensor nunca deja de publicar; ni de tiempo, porque la latencia es normal antes y después.
+  - **Causa:** el proceso del filtro se cae (por ejemplo, una excepción sin capturar) y alguien o algo lo vuelve a lanzar 10 s después. Descarto filtro lento (latencia de 7 ms y 10 Hz fuera del hueco) y fallo del sensor (`/distancia` sin huecos).
+  - **Arreglo:** (1) mirar el log del filtro para encontrar la excepción y corregirla; (2) poner `respawn=True` (con `respawn_delay` corto) en el `Node` del filtro en el fichero launch, para que se relance solo en vez de tardar 10 s; (3) añadir en el controlador un temporizador de seguridad que pare el robot si lleva más de, por ejemplo, 0,5 s sin recibir `/distancia_filtrada`.
+  - **Comprobación:** matar el filtro a mano durante una prueba (`kill` del proceso), grabar un bag y analizarlo: el hueco debe durar lo que tarde el `respawn` (menos de 1 s para que no salga como ERROR) y `/cmd_vel_demo` debe mostrar la orden de parada.
+
+Resultado de la resolución del compañero (¿acertó? ¿qué le faltó? Si no hubo intercambio, «sin intercambio» y por qué): **sin intercambio**. No encontré pareja para intercambiar el reto dentro del plazo. El reto queda preparado en `reto/` (bag + ficha sin solución) por si se quiere asignar a un compañero. Una nota honesta sobre las pistas: `empaquetar_reto.py` cambia el nombre de la carpeta, del `.mcap` y de `metadata.yaml`, pero dentro del `.mcap` queda una copia de los metadatos con el nombre original (`strings reto/reto_1/reto_1.mcap | grep mi_`). Por eso llamé al bag `mi_fallo`, que no dice de qué fallo se trata.
 
 ## Ejercicio 5 — Lista de comprobación ampliada
 
