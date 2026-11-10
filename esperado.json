@@ -37,6 +37,17 @@
       "errores": [
         "SIN_DATOS"
       ]
+    },
+    "mi_rango": {
+      "salida": 0,
+      "errores": []
+    },
+    "mi_fallo": {
+      "salida": 1,
+      "errores": [
+        "CAIDA_EN_CADENA",
+        "HUECOS"
+      ]
     }
   }
 }
