@@ -1,18 +1,13 @@
 # Práctica P2 (Tema 2) — Informe
 
 **Nombre:** Joel Cárdenas
-**Fecha:** 10.11.2026
-**Entorno usado:** local (Linux), Python 3.13, Git 2.43. Sin ROS2 (no he hecho las partes opcionales con ROS2).
 
-> Regla de oro: **hipótesis escrita ANTES de medir**. Cada afirmación lleva su evidencia (comando + salida o gráfica).
-
----
 
 ## Declaración de autoría y uso de IA
 
 Trabajo individual. Fuentes consultadas: el enunciado de la P2 y el de la práctica autónoma de la S8, el README y las cabeceras de los scripts del kit (`analiza_bag.py`, `simulador_bags.py`, `regresion_bags.py`, `simula_ci.py`), los apuntes de las sesiones 7, 8 y 9, y la documentación de ROS2 (rosbag2, tf2), de Git y de GitHub Actions.
 
-Uso de asistentes de IA (para qué, o «ninguno»): sí. He usado un asistente de IA (Claude, de Anthropic) como ayuda en toda la práctica: para ejecutar los análisis de los bags, escribir el código de `mis_comprobaciones.py`, `mis_bags.py` y las pruebas propias, preparar los commits y redactar el borrador de este informe. Los commits hechos con su ayuda llevan la línea `Co-Authored-By`. He revisado y ejecutado todo lo que entrego y puedo explicarlo.
+Uso de asistentes de IA (para qué, o «ninguno»): sí. He usado un asistente de IA (Claude, de Anthropic) como ayuda en  la práctica. 
 
 ## Ejercicio 1 — Caso 5 (`bags/caso_5_casa`)
 
@@ -58,7 +53,7 @@ Graficas guardadas en informe_caso5.png
 
 Nota sobre la gráfica: en el panel «Ritmo por topic», `/distancia` salta entre 0 y 2 mensajes por segundo. No es un fallo real: como publica justo una vez por segundo, un pequeño adelanto o retraso hace que un mensaje caiga en el segundo anterior o en el siguiente al contarlos. La media sigue siendo 1 Hz (columna `Hz` y `max dt` = 1,00 s).
 
-**¿Qué dice el grafo del sistema y qué dice el bag?** El grafo (`rqt_graph`, `ros2 node list`, `ros2 topic info`) solo dice **quién está conectado con quién**: aquí saldría perfecto, con los tres nodos y los tres topics bien unidos. No dice nada de **cuántos** mensajes pasan ni cuándo. El bag sí: guarda cada mensaje con su instante, y por eso se ve que el ritmo es 1 Hz. Igual que en el caso D de la S7, el fallo no es de estructura sino de configuración en el origen, y un grafo correcto no garantiza que el sistema funcione: hay que medir (`ros2 topic hz` en vivo, o el bag después).
+**¿Qué dice el grafo del sistema y qué dice el bag?** El grafo (`rqt_graph`, `ros2 node list`, `ros2 topic info`) solo dice quién está conectado con quién: aquí saldría perfecto, con los tres nodos y los tres topics bien unidos. No dice nada de cuántos mensajes pasan ni cuándo. El bag sí: guarda cada mensaje con su instante, y por eso se ve que el ritmo es 1 Hz. Igual que en el caso D de la S7, el fallo no es de estructura sino de configuración en el origen, y un grafo correcto no garantiza que el sistema funcione: hay que medir (`ros2 topic hz` en vivo, o el bag después).
 
 **Pregunta de control.** Sin `--esperado`, la herramienta supone 10 Hz para el primer topic de la cadena. Con un sensor diseñado a 1 Hz daría `RITMO_BAJO` aunque el sensor estuviera bien: un falso positivo. Lo he comprobado con este mismo bag diciéndole que lo esperado es 1 Hz:
 
