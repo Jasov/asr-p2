@@ -232,7 +232,33 @@ Las 7 preguntas de la clase + 3 mías (cada una con su herramienta, qué detecta
 
 ## Ejercicio 6 — Autoformación guiada
 
-Puntos de control de la *Guía de autoformación de la S8* (resumen de lo aprendido y dudas): <<RELLENAR>>
+Puntos de control de la *Guía de autoformación de la S8* (resumen de lo aprendido y dudas):
+
+**1. rosbag2 avanzado**
+- `ros2 bag record -o nombre /a /b` graba solo los topics que se piden; `-a` graba todos, pero el bag crece muy rápido. Es mejor grabar la cadena que se quiere estudiar.
+- `ros2 bag info` es la primera medida barata: duración, número de mensajes y tipo por topic. Con solo eso se puede hacer una hipótesis (lo he usado en el ejercicio 1: 40 mensajes en 39 s ya indican 1 Hz).
+- El bag guarda **dos tiempos**: el instante en que se grabó cada mensaje y, si el mensaje tiene cabecera, el `header.stamp` que puso el nodo. La diferencia entre los dos es la latencia. Sin cabecera solo hay el primero (ejercicio 2).
+- `ros2 bag play` reproduce el bag como si los nodos estuvieran vivos. Opciones útiles: `--rate` para ir más lento o más rápido, `--loop`, `--topics` para reproducir solo algunos y `--clock` para publicar `/clock` (entonces los nodos deben tener `use_sim_time:=true`).
+- El formato por defecto en Jazzy es MCAP (antes sqlite3, `.db3`). La carpeta del bag lleva además un `metadata.yaml`.
+- La QoS también importa al grabar y al reproducir: si el publicador y el suscriptor no son compatibles (por ejemplo, publicador «best effort» y suscriptor «reliable») no llega nada y no da error.
+
+**2. RViz2 y tf2**
+- RViz2 no «tiene» datos: se suscribe a topics y los dibuja respecto a un *Fixed Frame*. Si el `frame_id` del mensaje no se puede transformar a ese frame, el display da error aunque el topic funcione.
+- tf2 mantiene el árbol de frames. `ros2 run tf2_tools view_frames` lo dibuja en un PDF y `ros2 run tf2_ros tf2_echo padre hijo` muestra una transformada concreta. Un árbol partido en dos, o un frame mal escrito, es un fallo estructural.
+- Las transformadas fijas (dónde está montado el sensor) se publican una vez en `/tf_static`; las que cambian (odometría), continuamente en `/tf`. Si se reproduce un bag sin `/tf_static`, RViz2 no puede colocar el sensor.
+- El display «Range» dibuja un cono con el campo de visión y la distancia: sirve para ver «a ojo» valores absurdos como los de `mi_rango`.
+
+**3. Depuración de arquitectura**
+- El método va de fuera adentro y de lo barato a lo caro: primero si las cosas existen y están conectadas (`ros2 node list`, `ros2 topic list`, `ros2 topic info -v`), después ritmos y huecos (`ros2 topic hz`), después frescura y reloj, y los logs al final.
+- Siempre hipótesis antes de medir: así la medida confirma o descarta algo, en vez de «mirar a ver qué sale».
+- Hay que separar síntoma de causa: el síntoma suele verse al final de la cadena (el robot no se mueve) y la causa estar al principio (el sensor). El eslabón roto es el primero donde el dato sale mal.
+- Las cuatro familias (estructural, dinámico, tiempo, origen aguas arriba) ayudan a elegir la herramienta: un fallo estructural se ve en el grafo; uno dinámico o de tiempo solo midiendo.
+
+**Dudas**
+- No he podido practicar la parte de ROS2 en esta práctica (la hice sin ROS2), así que `ros2 bag play` y RViz2 con estos bags sintéticos no los he probado: no sé si RViz2 los reproduce igual que un bag real.
+- ¿Cómo se graba y se reproduce correctamente un topic con QoS «transient local» como `/tf_static`? ¿Hace falta pasar un fichero de QoS a `ros2 bag play`?
+- Cuando se usa `--clock` y `use_sim_time`, ¿qué reloj usa `analiza_bag.py` para la latencia: el de grabación del bag original o el simulado?
+- ¿Cuánto retraso añade el propio `ros2 bag record` a la medida de latencia cuando el ordenador va cargado?
 
 ## Ejercicio 7 — Repositorio Git con integración continua
 
