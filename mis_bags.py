@@ -16,6 +16,11 @@ def generar_ejercicio_2():
     sim.generar('mi_lento_float', 'bags', retardo_filtro=0.25, tipo_mensaje='Float32')
 
 
+def generar_ejercicio_3():
+    # El sensor publica 9,9 m entre el segundo 10 y el 12 (su max_range es 4 m)
+    sim.generar('mi_rango', 'bags', fuera_de_rango=(10, 12, 9.9))
+
+
 def mi_fallo(msgs):
     """Ejercicio 4: el nodo filtro se cae en el segundo 15 y vuelve a arrancar en el 25.
 
@@ -39,4 +44,5 @@ def generar_ejercicio_4():
 
 if __name__ == '__main__':
     generar_ejercicio_2()
+    generar_ejercicio_3()
     generar_ejercicio_4()
