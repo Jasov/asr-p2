@@ -72,12 +72,85 @@ Es decir, el mismo bag es «sano» o «roto» según el requisito. Por eso el re
 
 ## Ejercicio 2 — Mis propios bags
 
-Bags entregados (en `bags/`, nombres que empiezan por `mi_`): <<RELLENAR>>
-Cómo los generé (comandos): <<RELLENAR>>
+Bags entregados (en `bags/`, nombres que empiezan por `mi_`): `mi_sano`, `mi_lento` y `mi_lento_float` (más `mi_rango` y `mi_fallo`, que son de los ejercicios 3 y 4).
 
-Tabla comparativa sano / con fallo (ritmos, latencia, hallazgos): <<RELLENAR>>
+Cómo los generé (comandos): con `simulador_bags.py`, sin ROS2. Están todos en el fichero `mis_bags.py` para poder regenerarlos con un solo comando:
 
-**¿Qué no puede medir la herramienta con mensajes sin cabecera (`Float32`)? ¿Por qué?** <<RELLENAR>>
+```
+$ python3 mis_bags.py
+mi_sano: 1200 mensajes -> bags/mi_sano
+mi_lento: 718 mensajes -> bags/mi_lento
+mi_lento_float: 718 mensajes -> bags/mi_lento_float
+```
+
+Las llamadas que hace son:
+
+```python
+sim.generar('mi_sano', 'bags')                                                    # sano
+sim.generar('mi_lento', 'bags', retardo_filtro=0.25)                              # callback lento en el filtro
+sim.generar('mi_lento_float', 'bags', retardo_filtro=0.25, tipo_mensaje='Float32') # mismo fallo, sin cabecera
+```
+
+El fallo elegido es un **callback lento en el filtro**: tarda 0,25 s en procesar cada mensaje.
+
+**Hipótesis (antes de analizar):**
+- `mi_sano`: 10 Hz en los tres topics y `TODO_OK`.
+- `mi_lento`: si el filtro tarda 0,25 s por mensaje, como mucho puede sacar 1/0,25 = 4 mensajes por segundo. El sensor sigue a 10 Hz, así que espero `/distancia` a 10 Hz y `/distancia_filtrada` y `/cmd_vel_demo` a unos 4 Hz (`CAIDA_EN_CADENA`). Además, como entran más mensajes de los que salen, la cola del filtro se llena y los datos esperan dentro: espero `LATENCIA_ALTA`.
+- `mi_lento_float`: los mismos ritmos (el fallo es el mismo), pero como `Float32` no lleva sello de tiempo, creo que la herramienta no podrá calcular la latencia y solo dará `CAIDA_EN_CADENA`.
+
+**Comando de análisis** (el mismo para los tres): `python3 analiza_bag.py bags/<nombre> --esperado /distancia=10`
+
+Tabla comparativa sano / con fallo (ritmos, latencia, hallazgos):
+
+| | `mi_sano` | `mi_lento` (Range) | `mi_lento_float` (Float32) |
+|---|---|---|---|
+| Mensajes totales | 1200 | 718 | 718 |
+| `/distancia` | 10,00 Hz | 10,00 Hz | 10,00 Hz |
+| `/distancia_filtrada` | 10,00 Hz | 4,00 Hz | 4,00 Hz |
+| `/cmd_vel_demo` | 10,00 Hz | 4,00 Hz | 4,00 Hz |
+| Latencia mediana `/distancia` | 0,002 s | 0,002 s | no se puede medir (`-`) |
+| Latencia mediana `/distancia_filtrada` | 0,007 s | 1,204 s | no se puede medir (`-`) |
+| Hallazgos | `TODO_OK` | `CAIDA_EN_CADENA` + `LATENCIA_ALTA` | solo `CAIDA_EN_CADENA` |
+| Código de salida | 0 | 1 | 1 |
+
+Las tres hipótesis se cumplen. Salidas de la herramienta:
+
+```
+== Informe de mi_sano ==
+topic                    tipo                           n      Hz  max dt  lat med
+/cmd_vel_demo            Twist                        400   10.00    0.10        -
+/distancia               Range                        400   10.00    0.10    0.002
+/distancia_filtrada      Range                        400   10.00    0.10    0.007
+Hallazgos:
+  [INFO ] TODO_OK           -                      ritmos, huecos, latencias y reloj dentro de lo esperado
+
+== Informe de mi_lento ==
+topic                    tipo                           n      Hz  max dt  lat med
+/cmd_vel_demo            Twist                        159    4.00    0.25        -
+/distancia               Range                        400   10.00    0.10    0.002
+/distancia_filtrada      Range                        159    4.00    0.25    1.204
+Hallazgos:
+  [ERROR] CAIDA_EN_CADENA   /distancia_filtrada    /distancia 10.0 Hz -> /distancia_filtrada 4.0 Hz: el ritmo cae en el nodo que une ambos topics
+  [ERROR] LATENCIA_ALTA     /distancia_filtrada    latencia mediana 1.20 s (maxima 1.25 s) > 0.1 s: los datos llegan viejos (cola llena o callback lento aguas arriba)
+
+== Informe de mi_lento_float ==
+topic                    tipo                           n      Hz  max dt  lat med
+/cmd_vel_demo            Twist                        159    4.00    0.25        -
+/distancia               Float32                      400   10.00    0.10        -
+/distancia_filtrada      Float32                      159    4.00    0.25        -
+Hallazgos:
+  [ERROR] CAIDA_EN_CADENA   /distancia_filtrada    /distancia 10.0 Hz -> /distancia_filtrada 4.0 Hz: el ritmo cae en el nodo que une ambos topics
+```
+
+Gráfica de apoyo: `informe_mi_lento.png` (generada con `--png informe_mi_lento.png`): en el panel de latencia se ve `/distancia_filtrada` en torno a 1,2 s frente a los milisegundos de `/distancia`.
+
+Diagnóstico de `mi_lento`: eslabón = nodo filtro (entre `/distancia` y `/distancia_filtrada`); familia = dinámico; causa = callback que tarda más (0,25 s) que el periodo de llegada (0,1 s); arreglo = sacar el trabajo pesado del callback o hacerlo más rápido, y si interesa el dato más reciente, usar una cola de profundidad 1 para no acumular datos viejos.
+
+**¿Qué no puede medir la herramienta con mensajes sin cabecera (`Float32`)? ¿Por qué?** No puede medir la **latencia** ni comprobar el **reloj**. La latencia se calcula como «instante en que se grabó el mensaje» menos «sello de tiempo que puso el nodo al crearlo» (`header.stamp`). Un `Float32` solo lleva un número (`data`): no tiene `header`, así que falta la segunda mitad de la resta. El bag solo sabe cuándo llegó el mensaje, no cuándo se midió el dato.
+
+**¿Qué hallazgo se pierde frente al mismo fallo con `Range`?** Se pierde `LATENCIA_ALTA` (y también se perdería `RELOJ_DESFASADO` si el fallo fuera de reloj). Con `Float32` sabemos que el filtro saca menos mensajes, pero no que cada dato sale con 1,2 s de retraso, que es lo peligroso para un robot que se mueve.
+
+**¿Qué haría en el sistema real para medir latencia sin cabecera?** Lo más sencillo es cambiar el tipo de mensaje por uno que lleve `header` (por ejemplo `Range`, o un tipo «Stamped») y rellenar el sello con la hora de la medida. Si no se puede cambiar el tipo, medir de extremo a extremo con una prueba: provocar un cambio brusco en la entrada (tapar el sensor) y medir en el bag cuánto tarda en aparecer el cambio en la salida.
 
 ## Ejercicio 3 — Extensión de la herramienta
 
