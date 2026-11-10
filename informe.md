@@ -1,8 +1,8 @@
 # Práctica P2 (Tema 2) — Informe
 
-**Nombre:** <<RELLENAR>>
-**Fecha:** <<RELLENAR>>
-**Entorno usado:** (Colab / local; versión de Python; ¿ROS2? ¿cuál?) <<RELLENAR>>
+**Nombre:** Joel Cárdenas
+**Fecha:** 10.11.2026
+**Entorno usado:** local (Linux), Python 3.13, Git 2.43. Sin ROS2 (no he hecho las partes opcionales con ROS2).
 
 > Regla de oro: **hipótesis escrita ANTES de medir**. Cada afirmación lleva su evidencia (comando + salida o gráfica).
 
@@ -15,18 +15,60 @@ Uso de asistentes de IA (para qué, o «ninguno»): <<RELLENAR>>
 
 ## Ejercicio 1 — Caso 5 (`bags/caso_5_casa`)
 
+**Paso 1 — solo `--info` (antes de analizar):**
+
+```
+$ python3 analiza_bag.py bags/caso_5_casa --info
+Duration:          39.010s
+Messages:          120
+Topic information: Topic: /cmd_vel_demo | Type: geometry_msgs/msg/Twist | Count: 40
+                   Topic: /distancia | Type: sensor_msgs/msg/Range | Count: 40
+                   Topic: /distancia_filtrada | Type: sensor_msgs/msg/Range | Count: 40
+```
+
+Para comparar, el bag sano (`bags/caso_0_linea_base --info`) dura 39,9 s y tiene 400 mensajes por topic.
+
 | Campo | Contenido |
 |---|---|
-| Síntoma (lo que se observa) | <<RELLENAR>> |
-| Hipótesis (escrita antes de ejecutar nada) | <<RELLENAR>> |
+| Síntoma (lo que se observa) | El bag dura lo mismo que el sano (39 s) pero tiene 10 veces menos mensajes: 40 por topic en vez de 400. El robot recibe la distancia muy pocas veces por segundo, así que reacciona tarde. |
+| Hipótesis (escrita antes de ejecutar nada) | 40 mensajes en 39 s es más o menos 1 Hz. Como los **tres** topics tienen el mismo número de mensajes, el filtro y el controlador no pierden nada: publican todo lo que reciben. Por tanto creo que el fallo está en el origen: el sensor publica a 1 Hz en vez de a 10 Hz. Espero ver `RITMO_BAJO` en `/distancia`. **No** espero `CAIDA_EN_CADENA` (los tres van igual), ni `HUECOS` (los mensajes cubren los 39 s), ni `LATENCIA_ALTA` (si no hay cola llena, los datos llegan frescos), ni `SIN_DATOS` (los tres topics existen con su nombre y su tipo). |
 | Comando(s) | `python3 analiza_bag.py bags/caso_5_casa --esperado /distancia=10 --png informe_caso5.png` |
-| Evidencia (salida / gráfica) | <<RELLENAR>> |
-| Eslabón donde se rompe | <<RELLENAR>> |
-| Familia (estructural / dinámico / tiempo / origen) | <<RELLENAR>> |
-| Causa raíz probable | <<RELLENAR>> |
-| Arreglo concreto y cómo comprobarlo | <<RELLENAR>> |
+| Evidencia (salida / gráfica) | Ver la salida debajo de la tabla y `informe_caso5.png`. Los tres topics van a 1,00 Hz, el periodo máximo es 1,00 s (ritmo regular, sin huecos) y la latencia es de 2 ms y 7 ms (normal). Único hallazgo: `RITMO_BAJO /distancia 1.00 Hz medidos frente a 10 Hz esperados`. La hipótesis se confirma. |
+| Eslabón donde se rompe | El primero de la cadena: el nodo sensor que publica `/distancia`. El filtro y el controlador funcionan bien (mantienen el ritmo que les llega). |
+| Familia (estructural / dinámico / tiempo / origen) | Dinámico (es un problema de ritmo) con origen aguas arriba: lo que se ve en `/distancia_filtrada` y `/cmd_vel_demo` es solo consecuencia de lo que pasa en el sensor. No es estructural (todo está conectado) ni de tiempo (latencia y reloj correctos). |
+| Causa raíz probable | El sensor está configurado a 1 Hz: el periodo de su temporizador (o su parámetro de frecuencia) vale 1,0 s en lugar de 0,1 s. El ritmo es exactamente 1,00 Hz y muy regular, lo que apunta a una configuración y no a un sensor saturado o un cable malo (eso daría un ritmo irregular o huecos). |
+| Arreglo concreto y cómo comprobarlo | En el nodo sensor, poner el periodo del temporizador a 0,1 s (`create_timer(0.1, ...)`) o corregir el parámetro de frecuencia en el launch/YAML si se pasa por parámetro. Comprobación: `ros2 topic hz /distancia` debe dar ≈ 10 Hz; después grabar un bag nuevo y ejecutar `python3 analiza_bag.py <bag> --esperado /distancia=10`, que debe dar `TODO_OK` y salida 0. |
 
-¿Qué os dice el grafo del sistema y qué os dice el bag? (pista: comparad con el caso D de la S7) <<RELLENAR>>
+```
+$ python3 analiza_bag.py bags/caso_5_casa --esperado /distancia=10 --png informe_caso5.png
+== Informe de caso_5_casa ==
+
+topic                    tipo                           n      Hz  max dt  lat med
+/cmd_vel_demo            Twist                         40    1.00    1.00        -
+/distancia               Range                         40    1.00    1.00    0.002
+/distancia_filtrada      Range                         40    1.00    1.00    0.007
+
+Hallazgos:
+  [ERROR] RITMO_BAJO        /distancia             1.00 Hz medidos frente a 10 Hz esperados
+
+Graficas guardadas en informe_caso5.png
+(código de salida: 1)
+```
+
+Nota sobre la gráfica: en el panel «Ritmo por topic», `/distancia` salta entre 0 y 2 mensajes por segundo. No es un fallo real: como publica justo una vez por segundo, un pequeño adelanto o retraso hace que un mensaje caiga en el segundo anterior o en el siguiente al contarlos. La media sigue siendo 1 Hz (columna `Hz` y `max dt` = 1,00 s).
+
+**¿Qué dice el grafo del sistema y qué dice el bag?** El grafo (`rqt_graph`, `ros2 node list`, `ros2 topic info`) solo dice **quién está conectado con quién**: aquí saldría perfecto, con los tres nodos y los tres topics bien unidos. No dice nada de **cuántos** mensajes pasan ni cuándo. El bag sí: guarda cada mensaje con su instante, y por eso se ve que el ritmo es 1 Hz. Igual que en el caso D de la S7, el fallo no es de estructura sino de configuración en el origen, y un grafo correcto no garantiza que el sistema funcione: hay que medir (`ros2 topic hz` en vivo, o el bag después).
+
+**Pregunta de control.** Sin `--esperado`, la herramienta supone 10 Hz para el primer topic de la cadena. Con un sensor diseñado a 1 Hz daría `RITMO_BAJO` aunque el sensor estuviera bien: un falso positivo. Lo he comprobado con este mismo bag diciéndole que lo esperado es 1 Hz:
+
+```
+$ python3 analiza_bag.py bags/caso_5_casa --esperado /distancia=1
+Hallazgos:
+  [INFO ] TODO_OK           -                      ritmos, huecos, latencias y reloj dentro de lo esperado
+(código de salida: 0)
+```
+
+Es decir, el mismo bag es «sano» o «roto» según el requisito. Por eso el requisito «este sensor publica a N Hz» no debe estar escondido como valor por defecto dentro de la herramienta: debe estar escrito en un sitio versionado junto al sistema, como el contrato `esperado.json` (campo `esperado_hz`) o la configuración del propio robot, y pasarse a la herramienta de forma explícita.
 
 ## Ejercicio 2 — Mis propios bags
 
