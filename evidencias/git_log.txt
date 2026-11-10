@@ -1,0 +1,21 @@
+*   ded650b Merge pull request #2 from Jasov/rojo-a-proposito
+|\  
+| * ed8e735 Documenta en el informe el rojo provocado y su diagnostico
+| * 065a6ec Devuelve el umbral de latencia a 0,1 s
+| * 61a4449 Sube el umbral de latencia a 2 s (rojo a proposito)
+* | 59de20b Merge pull request #1 from Jasov/ej3-rango
+|\| 
+| * 45b31cb Amplia el contrato con mi_rango y mi_fallo y documenta el ejercicio 3
+| * c6dfb14 Anade cinco pruebas propias con casos limite
+| * 1c0aa9b Anade la comprobacion de frames (FRAME_MIXTO)
+| * 14a21a0 Anade la comprobacion de rangos (RANGO_FUERA)
+| * cbad6ed Anade el bag mi_rango que demuestra el punto ciego
+* | b5cec52 Revisa el informe antes de subirlo
+|/  
+* c36ba5b Redacta la memoria conceptual, la declaracion de IA y la reflexion
+* 8e3372e Resume la autoformacion de la S8 y anota las dudas
+* 477169b Amplia la lista de comprobacion con tres preguntas
+* a8ec569 Disena el quinto fallo: el filtro se cae y vuelve
+* 9776ef5 Genera y compara mis bags: sano, filtro lento y sin cabecera
+* b770844 Diagnostica el caso 5 con hipotesis previa
+* b19f4e8 Punto de partida de la P2
