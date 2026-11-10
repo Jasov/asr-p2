@@ -311,7 +311,15 @@ Las 7 preguntas de la clase + 3 mías (cada una con su herramienta, qué detecta
 
 ## Ejercicio 6 — Autoformación guiada
 
-No realizado.
+Sigo las cinco etapas de la *Guía de autoformación de la S8* (de la 0 a la 4), tal como aparecen en la diapositiva «Autoformación guiada» de `Tema2_Sesion8.pdf`. En cada una resumo lo que he aprendido con las diapositivas de la S8 y con esta práctica, e indico qué evidencia me falta.
+
+| Etapa | Contenido | Lo que he aprendido | Evidencia que pide la guía | Estado |
+|---|---|---|---|---|
+| 0 | Preparar el entorno | rosbag2 se maneja con `ros2 bag record`, `ros2 bag info` y `ros2 bag play`. Sin ROS2, `analiza_bag.py --info` da un resumen equivalente a `ros2 bag info`, y es lo que he usado. | Captura de `ros2 bag --help` | No hecha (sin ROS2) |
+| 1 | rosbag2 básico | Grabar solo lo necesario con `ros2 bag record -o nombre /a /b`; `-a --no-discovery` graba todo pero el bag crece mucho; se para con un solo Ctrl+C y se comprueba con `ros2 bag info` que no está vacío. Al reproducir con `ros2 bag play` hay que parar los nodos originales (si no, hay dos publicadores por topic), y el sistema va en bucle abierto: no puede reaccionar sobre lo grabado. | Bag de turtlesim + `ros2 bag info` | No hecha. Lo más parecido: el `--info` de los bags del kit y de los míos (ejercicios 1 y 2) |
+| 2 | rosbag2 avanzado | Un bag tiene tres relojes: instante de grabación, `header.stamp` y `/clock`; latencia = grabación − `header.stamp`, y sin cabecera no se puede medir (ejercicio 2). MCAP es el formato por defecto en Jazzy (`-s sqlite3` para el antiguo). Se parte con `-b` (más de 86016 bytes) o `-d` (segundos) y se comprime con zstd por fichero o por bloques (`--storage-preset-profile`). Si la QoS no coincide, se fuerza con un fichero de overrides en `record` y en `play`. | Tabla de tamaños + fichero de overrides | No hecha |
+| 3 | RViz2 y tf2 | RViz2 solo observa: se suscribe a topics y los dibuja respecto al *Fixed Frame*. «Fixed Frame does not exist» o un display en rojo indican que falta el marco o la cadena de transformadas; se comprueba con `ros2 run tf2_tools view_frames` y `ros2 run tf2_ros tf2_echo base_link sensor_link`. La configuración se guarda y se abre con `rviz2 -d`. | Captura de RViz2 + `frames.pdf` | No hecha. Como sustituto sin pantalla he usado las gráficas `--png` (`informe_caso5.png`) |
+| 4 | Depuración de arquitectura | Preguntar «¿entre qué dos componentes se rompe?» antes de abrir el código: eslabón, familia y evidencia repetible. Dimensionar una cola es dimensionar un retraso: 10 mensajes a 10 Hz son ≈ 1 s de datos. El informe lleva hipótesis antes, comando exacto, evidencia, causa, arreglo y «lo que no sé». | Informe de autopsia (2 págs.) | Parcial: los informes de los ejercicios 1 (caso 5) y 4 siguen esa estructura |
 
 ## Ejercicio 7 — Repositorio Git con integración continua
 
