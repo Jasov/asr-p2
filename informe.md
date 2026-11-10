@@ -222,13 +222,13 @@ Resultado de la resolución del compañero (¿acertó? ¿qué le faltó? Si no h
 
 ## Ejercicio 5 — Lista de comprobación ampliada
 
-Las 7 preguntas de la clase + 3 mías (cada una con su herramienta, qué detecta y un caso que la justifique):
+Las 7 preguntas de la clase + 3 mías (cada una con su herramienta, qué detecta y un caso que la justifique). Las ordeno igual que en clase, de barata a cara:
 
 | # | Pregunta | Herramienta | Detecta | Caso que la justifica |
 |---|---|---|---|---|
-| 8 | <<RELLENAR>> | | | |
-| 9 | <<RELLENAR>> | | | |
-| 10 | <<RELLENAR>> | | | |
+| 8 | ¿Los valores que se publican son físicamente posibles (dentro de `min_range`/`max_range`, sin `NaN`)? | En vivo: `ros2 topic echo /distancia --field range`. Con bag: `python3 mis_comprobaciones.py <bag> /distancia` (`RANGO_FUERA`). | Un sensor o driver que publica a buen ritmo y a tiempo, pero con datos imposibles. Las preguntas 1-7 miran si los mensajes llegan y cuándo, no qué llevan dentro. | Mi bag `mi_rango` (ejercicio 3): el sensor publica 9,9 m con `max_range` = 4 m durante 2 s y `analiza_bag.py` dice `TODO_OK`. El filtro promedia ese valor y el controlador decide con un dato falso. |
+| 9 | ¿Cada topic tiene el número de publicadores que espero (ni un nodo de más, ni uno de menos)? | `ros2 topic info -v /distancia_filtrada` (Publisher count) y `ros2 node list` (avisa si hay nombres de nodo repetidos). Con bag: buscar huecos o el doble del ritmo esperado. | Un nodo lanzado dos veces (dos terminales con el mismo launch): el topic va al doble de ritmo y los datos se mezclan. O un nodo que se ha caído: 0 publicadores aunque el topic siga existiendo porque queda el suscriptor. | Mi bag `mi_fallo` (ejercicio 4): el filtro se cae 10 s. En vivo, `ros2 topic info` habría mostrado «Publisher count: 0» al momento, mucho antes de analizar un bag. |
+| 10 | ¿El `frame_id` de los mensajes es siempre el mismo y existe en el árbol de transformadas? | `ros2 topic echo /distancia --field header.frame_id`, `ros2 run tf2_tools view_frames` y `ros2 run tf2_ros tf2_echo base_link sensor_link`. Con bag: `comprobar_frames` (`FRAME_MIXTO`). | Datos correctos pero colocados en el sitio equivocado: un `frame_id` mal escrito, dos nodos que usan frames distintos en el mismo topic o un frame que nadie publica en `/tf`. | En RViz2 el display «Range» no dibuja nada y da error de transformada si `sensor_link` no está conectado con el frame fijo, aunque `ros2 topic hz` diga que todo va a 10 Hz. Lo cubre la prueba `test_dos_frames`. |
 
 ## Ejercicio 6 — Autoformación guiada
 
